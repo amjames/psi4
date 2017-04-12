@@ -268,7 +268,7 @@ PsiReturnType ccdensity(std::shared_ptr<Wavefunction> ref_wfn, Options& options)
         x_Gijab();
       }
     }
- 
+
     sortone(rho_params[i]); /* puts full 1-pdm into moinfo.opdm */
     if (!params.onepdm) {
       if(!params.aobasis && params.debug_) energy(rho_params[i]);
@@ -438,8 +438,14 @@ PsiReturnType ccdensity(std::shared_ptr<Wavefunction> ref_wfn, Options& options)
       }
     }else{
       // this should set psivars correctly for root Properties
-      oe->set_title(cc_prop_label + " ROOT " + std::to_string(i));
+      oe->set_title(cc_prop_label + "ROOT" + std::to_string(i));
       oe->compute();
+      SharedMatrix cc_Da = oe->Da_so();
+      ref_wfn->set_array(cc_prop_label + " ROOT_" + std::to_string(i) + " Da", cc_Da);
+      if(!ref_wfn->same_a_b_dens()){
+        SharedMatrix cc_Db = oe->Db_so();
+        ref_wfn->set_array(cc_prop_label + " ROOT_" + std::to_string(i) + " Db", cc_Db)
+      }
       /*- Process::environment.globals["CC ROOT n DIPOLE X"] -*/
       /*- Process::environment.globals["CC ROOT n DIPOLE Y"] -*/
       /*- Process::environment.globals["CC ROOT n DIPOLE Z"] -*/
