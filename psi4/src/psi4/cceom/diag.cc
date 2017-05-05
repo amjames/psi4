@@ -1004,6 +1004,7 @@ timer_off("INIT GUESS");
           ss << "CC ROOT " << (num_converged_index+1) << " CORRELATION ENERGY";
           Process::environment.globals[ss.str()] = lambda_old[i];
 
+
           outfile->Printf("EOM State %d %10.3lf %10.1lf %14.10lf  %17.12lf\n", ++num_converged_index,
              lambda_old[i]* pc_hartree2ev, lambda_old[i]* pc_hartree2wavenumbers, lambda_old[i], totalE);
 
