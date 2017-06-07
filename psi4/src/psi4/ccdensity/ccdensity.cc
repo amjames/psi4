@@ -363,7 +363,8 @@ PsiReturnType ccdensity(std::shared_ptr<Wavefunction> ref_wfn, Options& options)
     for (int h = 0; h < Ca->nirrep(); h++) {
       int nmo = nmopi[h];
       int nfv = frzvpi[h];
-      int nmor = nmo - nfv;
+      //int nmor = nmo - nfv;
+      int nmor = nmo;
       if (!nmo || !nmor) continue;
 
       // Loop over QT, convert to Pitzer
@@ -436,16 +437,36 @@ PsiReturnType ccdensity(std::shared_ptr<Wavefunction> ref_wfn, Options& options)
         nowriter.write(mol_name + "NO.molden", NO_Ca, NO_Cb, NOa_pair.second, NOb_pair.second,
                        NOa_pair.second, NOb_pair.second, options.get_bool("MOLDEN_WITH_VIRTUAL"));
       }
-    }else{
+    }
+    else
+    {
       // this should set psivars correctly for root Properties
-      oe->set_title(cc_prop_label + "ROOT_" + std::to_string(i));
+      oe->set_title(cc_prop_label + "ROOT " + std::to_string(i));
       oe->compute();
       SharedMatrix cc_Da = oe->Da_so();
-      ref_wfn->set_array(cc_prop_label + " ROOT " + std::to_string(i) + " DA", cc_Da);
+      ref_wfn->set_array(cc_prop_label + " ROOT " + std::to_string(i) + " DA", cc_Da->clone());
+
+      std::pair<SharedMatrix, SharedVector> NOa_pair = oe->Na_mo();
+      std::pair<SharedMatrix, SharedVector> NOb_pair = oe->Na_mo();
       if(!ref_wfn->same_a_b_dens()){
+        NOb_pair = oe->Nb_mo();
         SharedMatrix cc_Db = oe->Db_so();
-        ref_wfn->set_array(cc_prop_label + " ROOT " + std::to_string(i) + " DB", cc_Db);
+        ref_wfn->set_array(cc_prop_label + " ROOT " + std::to_string(i) + " DB", cc_Db->clone());
       }
+      //Add root Natural orbitals to ref_wfn.arrays
+      ref_wfn->set_array(cc_prop_label + " ROOT " + std::to_string(i) + " NOA", NOa_pair.first->clone());
+      ref_wfn->set_array(cc_prop_label + " ROOT " + std::to_string(i) + " NOB", NOb_pair.first->clone());
+
+      //Add root NOONs vector to ref_wfn.arrays, convert to shared matrix first
+      SharedMatrix root_NOONA_diag( new Matrix(cc_prop_label + " ROOT " + std::to_string(i) + " NOONA",
+            Ca->colspi(), Ca->colspi()));
+      SharedMatrix root_NOONB_diag( new Matrix(cc_prop_label + " ROOT " + std::to_string(i) + " NOONB",
+            Cb->colspi(), Cb->colspi()) );
+      root_NOONA_diag->set_diagonal(NOa_pair.second);
+      root_NOONB_diag->set_diagonal(NOb_pair.second);
+      ref_wfn->set_array(root_NOONA_diag->name(), root_NOONA_diag->clone());
+      ref_wfn->set_array(root_NOONB_diag->name(), root_NOONB_diag->clone());
+
       /*- Process::environment.globals["CC ROOT n DIPOLE X"] -*/
       /*- Process::environment.globals["CC ROOT n DIPOLE Y"] -*/
       /*- Process::environment.globals["CC ROOT n DIPOLE Z"] -*/
