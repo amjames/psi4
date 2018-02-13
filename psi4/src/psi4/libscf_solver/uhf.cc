@@ -187,6 +187,11 @@ void UHF::form_G()
         Gb_->zero();
     }
 
+    // If we enter from a previous stability run, we need to clear c_right
+    if(options_.get_bool("SAVE_JK")){
+      std::vector<SharedMatrix> & Cr = jk_->C_right();
+      Cr.clear();
+    }
     // Push the C matrix on
     std::vector<SharedMatrix> & C = jk_->C_left();
     C.clear();
@@ -934,6 +939,7 @@ bool UHF::stability_analysis()
        //     Ca_->print();
 
        // Ask politely SCF control for a new set of iterations
+       iteration_ = 0;
        return true;
     } else {
         outfile->Printf("    Stability analysis over.\n");
