@@ -2602,6 +2602,12 @@ def run_cc_property(name, **kwargs):
         core.set_global_option('WFN', this_name)
         ccwfn = run_ccenergy(name, **kwargs)
         core.set_global_option('WFN', this_name)
+    elif name == 'ccsd(t)':
+        # need to set dertype FIRST for CCENERGY so (T) OPDM/lambda contribs are computed.
+        core.set_global_option('WFN', "CCSD_T")
+        core.set_global_option('DERTYPE', 'FIRST')
+        ccwfn = run_ccenergy(name, **kwargs)
+        core.set_global_option('DERTYPE', 'NONE')
     else:
         raise ValidationError("""CC property name %s not recognized""" % name.upper())
 
