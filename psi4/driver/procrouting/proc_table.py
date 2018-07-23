@@ -192,6 +192,7 @@ procedures = {
             'mp2'      : proc.select_mp2_property,
             'cc2'      : proc.run_cc_property,
             'ccsd'     : proc.run_cc_property,
+            'ccsd(t)'  : proc.run_cc_property,
             'eom-cc2'  : proc.run_cc_property,
             'eom-ccsd' : proc.run_cc_property,
             'detci'    : proc.run_detci_property,  # full control over detci
