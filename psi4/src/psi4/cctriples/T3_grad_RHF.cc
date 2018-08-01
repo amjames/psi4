@@ -45,6 +45,35 @@
 namespace psi {
 namespace cctriples {
 
+  enum class Loop_t { ijk, abc, pre_ijk, bt_ijk_abc, post_abc };
+
+  void memory_report(Loop_t lt, int x = 0, int y = 0, int z = 0){
+    size_t mem_free = dpd_memfree();
+    outfile->Printf("\n\n----------------------------------------------\n");
+    outfile->Printf("                DPD MEMORY REPORT\n");
+    outfile->Printf("-----------------------------------------------\n");
+    switch(lt){
+      case Loop_t::abc:
+        outfile->Printf("    A = %3d, B = %3d, C = %3d \n", x, y , z);
+        break;
+      case Loop_t::ijk:
+        outfile->Printf("    I = %3d, B = %3d, C = %3d \n", x, y, z );
+        break;
+      case Loop_t::pre_ijk:
+        outfile->Printf("    BEFORE IJK LOOPS \n");
+        break;
+      case Loop_t::bt_ijk_abc:
+        outfile->Printf("    BETWEEN IJK AND ABC LOOPS\n");
+        break;
+      case Loop_t::post_abc:
+        outfile->Printf("    AFTER ABC LOOPS \n");
+        break;
+    }
+    outfile->Printf("-----------------------------------------------\n");
+    outfile->Printf("   mem_free (mB) = %9.1f\n", mem_free * sizeof(double)/1e6);
+    outfile->Printf("-----------------------------------------------\n\n");
+  }
+
 void T3_grad_RHF(void) {
     int h, nirreps;
     int I, J, K, A, B, C, D, L;
@@ -167,6 +196,7 @@ void T3_grad_RHF(void) {
     RW = (double ***)malloc(nirreps * sizeof(double **));
 
     // mijk = 0;
+    memory_report(Loop_t::pre_ijk, 0,0,0);
     for (Gi = 0; Gi < nirreps; Gi++) {
         for (Gj = 0; Gj < nirreps; Gj++) {
             for (Gk = 0; Gk < nirreps; Gk++) {
@@ -821,7 +851,7 @@ void T3_grad_RHF(void) {
                                 global_dpd_->free_dpd_block(RW[Ga], virtpi[Ga], Fints.params->coltot[Gbc]);
                             }
                             timer_off("malloc");
-
+                            memory_report(Loop_t::ijk, i, j, k);
                         } /* k */
                     }     /* j */
                 }         /* i */
@@ -863,7 +893,7 @@ void T3_grad_RHF(void) {
     global_dpd_->file2_mat_wrt(&DAB);
     global_dpd_->file2_mat_close(&DAB);
     global_dpd_->file2_close(&DAB);
-
+    memory_report(Loop_t::bt_ijk_abc);
     /* Compute the number of ABC combinations */
     /* For now, we need all combinations for gradients */
     /*nabc = 0;
@@ -1489,6 +1519,7 @@ void T3_grad_RHF(void) {
                             }
 
                             timer_off("malloc");
+                            memory_report(Loop_t::abc, a, b ,c);
 
                         } /* c */
                     }     /* b */
@@ -1539,6 +1570,8 @@ void T3_grad_RHF(void) {
     global_dpd_->file2_close(&fIJ);
     global_dpd_->file2_close(&fAB);
     global_dpd_->file2_close(&fIA);
+
+    memory_report(Loop_t::post_abc);
 
     // symmetrizing wrt interchange of i,j and a,b
 
