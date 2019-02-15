@@ -105,6 +105,7 @@ Matrix::Matrix(const Matrix *c) : rowspi_(c->rowspi_), colspi_(c->colspi_) {
     nirrep_ = c->nirrep_;
     symmetry_ = c->symmetry_;
     name_ = c->name();
+    numpy_shape_ = c->numpy_shape_;
     alloc();
     copy_from(c->matrix_);
 }
