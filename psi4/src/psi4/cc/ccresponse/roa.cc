@@ -40,10 +40,13 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <cmath>
 #include "psi4/libciomr/libciomr.h"
 #include "psi4/libpsio/psio.h"
 #include "psi4/libqt/qt.h"
 #include "psi4/physconst.h"
+#include "psi4/libmints/wavefunction.h"
+#include "psi4/libmints/matrix.h"
 #include "MOInfo.h"
 #include "Params.h"
 #include "Local.h"
@@ -58,7 +61,8 @@ void compute_X(const char *pert, int irrep, double omega);
 void linresp(double *tensor, double A, double B, const char *pert_x, int x_irrep, double omega_x, const char *pert_y,
              int y_irrep, double omega_y);
 
-void roa() {
+
+void roa(std::shared_ptr<Wavefunction> ref_wfn) {
     double ***tensor_rl, ***tensor_pl, **tensor0, ***tensor_rr;
     double ****tensor_rQ, ***tensor_rQ0, ***tensor_rQ1;
     double **tensor_rl0, **tensor_rl1, **tensor_pl0, **tensor_pl1;
@@ -283,7 +287,8 @@ void roa() {
                 psio_close(j, 0);
                 psio_open(j, 0);
             }
-        } else {
+        }
+        else {
             outfile->Printf("\n");
             outfile->Printf("\tUsing %s tensor found on disk.\n", lbl3);
             psio_read_entry(PSIF_CC_INFO, lbl1, (char *)tensor_rr[i][0], 9 * sizeof(double));
@@ -306,9 +311,8 @@ void roa() {
         sprintf(lbl1, "1/2 <<Mu;L*>>_(%5.3f)", params.omega[i]);
         sprintf(lbl2, "1/2 <<P*;L*>>_(%5.3f)", params.omega[i]);
         sprintf(lbl3, "<<Mu;Q>>_(%5.3f)", -params.omega[i]);
-        if (!params.restart ||
-            ((compute_rl && !psio_tocscan(PSIF_CC_INFO, lbl1)) || (compute_pl && !psio_tocscan(PSIF_CC_INFO, lbl2)) ||
-             !psio_tocscan(PSIF_CC_INFO, lbl3))) {
+        if (!params.restart || (compute_rl && !psio_tocscan(PSIF_CC_INFO, lbl1)) || (compute_pl && !psio_tocscan(PSIF_CC_INFO, lbl2)) ||
+             !psio_tocscan(PSIF_CC_INFO, lbl3)) {
             if (compute_pl) {
                 for (alpha = 0; alpha < 3; alpha++) {
                     sprintf(pert, "P*_%1s", cartcomp[alpha]);
@@ -379,6 +383,9 @@ void roa() {
                     }
                 }
             }
+            next = PSIO_ZERO;
+            for (alpha = 0; alpha < 3; alpha++)
+                psio_write(PSIF_CC_INFO, lbl3, (char *)tensor_rQ1[alpha][0], 9 * sizeof(double), next, &next);
 
             /* Clean up disk space */
             psio_close(PSIF_CC_LR, 0);
@@ -389,7 +396,8 @@ void roa() {
                 psio_open(j, 0);
             }
 
-        } else {
+        }
+        else {
             outfile->Printf("\n");
             if (compute_rl) {
                 outfile->Printf("\tUsing %s tensor found on disk.\n", lbl1);
@@ -406,25 +414,75 @@ void roa() {
                 psio_read(PSIF_CC_INFO, lbl3, (char *)tensor_rQ1[alpha][0], 9 * sizeof(double), next, &next);
         }
 
+        long om_nm = std::lround((pc_c * pc_h * 1e9) / (pc_hartree2J * params.omega[i]));
+        auto make_matrix = [](int order) {
+          int size = pow(3, order);
+          auto ret = std::make_shared<Matrix>(" ", 1, size);
+          ret->set_numpy_shape(std::vector<int>(order, 3));
+          return ret;
+        };
+        auto make_label = [&om_nm](std::string name, std::string gauge = ""){
+          std::stringstream tag;
+          tag << "TENSOR::" << name << "::";
+          if (gauge != ""){
+            tag << gauge << "::";
+          }
+          tag << om_nm << "NM";
+          return tag.str();
+        };
+        int matP;
         /* sum the two 1/2 tensors for the mixed perturbations */
-        for (j = 0; j < 3; j++)
-            for (k = 0; k < 3; k++) {
-                if (compute_rl) tensor_rl[i][j][k] = tensor_rl0[j][k] + tensor_rl1[j][k];
-                if (compute_pl) tensor_pl[i][j][k] = tensor_pl0[j][k] + tensor_pl1[j][k];
+        if (compute_rl) {
+          auto mat_rot_len = make_matrix(2);
+          for (j = 0,matP=0; j < 3; j++){
+              for (k = 0; k < 3; k++, matP++) {
+                  tensor_rl[i][j][k] = tensor_rl0[j][k] + tensor_rl1[j][k];
+                  mat_rot_len->set(0, matP, tensor_rl[i][j][k]);
             }
+          }
+          ref_wfn->set_array_variable(make_label("OPTROT", "LEN"), mat_rot_len);
+        }
+        if (compute_pl) {
+          auto mat_rot_vel = make_matrix(2);
+          auto mat_rot_mvg = make_matrix(2);
+          for (j = 0, matP=0; j < 3; j++){
+              for (k = 0; k < 3; k++, matP++) {
+                  tensor_pl[i][j][k] = tensor_pl0[j][k] + tensor_pl1[j][k];
+                  mat_rot_vel->set(0, matP, tensor_pl[i][j][k]);
+                  mat_rot_mvg->set(0, matP, tensor_pl[i][j][k] - tensor0[j][k]);
+            }
+          }
+          ref_wfn->set_array_variable(make_label("OPTROT", "VEL"), mat_rot_vel);
+          ref_wfn->set_array_variable(make_label("OPTROT", "MVG"), mat_rot_mvg);
+        }
 
-        for (j = 0; j < 3; j++)
-            for (k = 0; k < 3; k++)
-                for (l = 0; l < 3; l++) tensor_rQ[i][j][k][l] = tensor_rQ0[j][k][l] + tensor_rQ1[j][k][l];
+        auto mat_dipquad = make_matrix(3);
+        for (j = 0, matP=0; j < 3; j++) {
+            for (k = 0; k < 3; k++) {
+                for (l = 0; l < 3; l++, matP++) {
+                    tensor_rQ[i][j][k][l] = tensor_rQ0[j][k][l] + tensor_rQ1[j][k][l];
+                    mat_dipquad->set(0, matP, tensor_rQ[i][j][k][l]);
+                }
+            }
+        }
+        ref_wfn->set_array_variable(make_label("DIPQUAD_POLAR"), mat_dipquad);
 
+        auto mat_dippol = make_matrix(2);
         /* Also symmetrize the rr tensor */
-        for (j = 0; j < 3; j++)
+        for (j = 0; j < 3; j++){
             for (k = 0; k < j; k++) {
                 if (k != j) {
                     value = 0.5 * (tensor_rr[i][j][k] + tensor_rr[i][k][j]);
                     tensor_rr[i][j][k] = tensor_rr[i][k][j] = value;
+                    int jk_p = j*3 +k;
+                    int kj_p = k*3 +j;
+                    mat_dippol->set(0, jk_p, value);
+                    mat_dippol->set(0, kj_p, value);
                 }
             }
+            mat_dippol->set(0, j*3 + j, tensor_rr[i][j][j]);
+        }
+        ref_wfn->set_array_variable(make_label("DIP_POLAR"), mat_dippol);
 
         if (params.wfn == "CC2")
             outfile->Printf("\n                 CC2 Dipole Polarizability [(e^2 a0^2)/E_h]:\n");
