@@ -16,7 +16,7 @@ units bohr
 
 set {
   basis ORP
-  set scf_type pk
+  scf_type pk
 }
 
 e = energy('scf')
